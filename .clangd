@@ -1,0 +1,13 @@
+CompileFlags:
+  Add:
+    - -std=c++23
+    - -fexperimental-library
+    - -march=native
+    - -Wall
+  Remove:
+    - -std=c++14
+Diagnostics:
+  UnusedIncludes: Strict
+  Suppressed:
+    - clang-diagnostic-unknown-warning-option
+    - clang-diagnostic-unknown-type
