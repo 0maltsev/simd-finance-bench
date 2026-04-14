@@ -1,0 +1,39 @@
+# Build artifacts
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+
+# Binaries & objects
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+*.a
+*.lib
+*.pdb
+*.ilk
+
+# IDE & editors
+.vscode/
+.idea/
+*.sln
+*.vcxproj
+*.xcworkspace
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test & coverage
+*.gcno
+*.gcda
+coverage/
+test_results/
+
+# Dependencies (если будешь использовать vcpkg/conan локально)
+vcpkg_installed/
+conan/
