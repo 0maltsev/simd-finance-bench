@@ -22,7 +22,7 @@ inline double scalar(std::span<const double> data, double alpha) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// 2. std::simd (experimental)
+// 2. std::simd (experimental) - P1928 compliant
 // ─────────────────────────────────────────────────────────────
 inline double simd(std::span<const double> data, double alpha) {
     using V = std::experimental::simd<double>;
@@ -41,9 +41,14 @@ inline double simd(std::span<const double> data, double alpha) {
         // Core EWMA step
         V new_s = v_alpha * x + v_alpha1 * v_s;
 
-        // Mask: skip stale/invalid ticks (common in order book feeds)
+        // Mask: skip stale/invalid ticks
         auto valid = x > 0.0;
-        s = std::experimental::where(valid, new_s, v_s)[vec_len - 1];
+
+
+        v_s[std::experimental::where(valid)] = new_s;
+
+        // Propagate last lane to scalar state
+        s = v_s[vec_len - 1];
     }
 
     // Scalar tail
@@ -69,7 +74,10 @@ inline double avx512(std::span<const double> data, double alpha) {
         __m512d v_s = _mm512_set1_pd(s);
         __m512d new_s = _mm512_fmadd_pd(v_alpha, x, _mm512_mul_pd(v_alpha1, v_s));
         __mmask8 valid = _mm512_cmp_pd_mask(x, _mm512_setzero_pd(), _CMP_GT_OS);
-        s = _mm512_mask_blend_pd(valid, v_s, new_s)[7];
+        __m512d blended = _mm512_mask_blend_pd(valid, v_s, new_s);
+        alignas(64) double buf[8];
+        _mm512_storeu_pd(buf, blended);
+        s = buf[7];
     }
     const double a1 = 1.0 - alpha;
     for (; i < data.size(); ++i) { if (data[i] > 0.0) s = alpha * data[i] + a1 * s; }
@@ -88,7 +96,7 @@ inline double avx2(std::span<const double> data, double alpha) {
         __m256d new_s = _mm256_fmadd_pd(v_alpha, x, _mm256_mul_pd(v_alpha1, v_s));
         __m256d cmp = _mm256_cmp_pd(x, _mm256_setzero_pd(), _CMP_GT_OS);
         __m256d blended = _mm256_blendv_pd(v_s, new_s, cmp);
-        double buf[4];
+        alignas(32) double buf[4];
         _mm256_storeu_pd(buf, blended);
         s = buf[3];
     }
