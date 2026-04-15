@@ -10,6 +10,7 @@
 #include "kernels/rsi.hpp"
 #include "kernels/sharpe_ratio.hpp"
 #include "kernels/sortino_ratio.hpp"
+#include "kernels/calmar_ratio.hpp"
 
 // ─────────────────────────────────────────────────────────────
 // Data Generation Helpers (deterministic, seed=42)
@@ -400,6 +401,51 @@ static void BM_SORTINO_AVX2(benchmark::State& state) {
 #endif
 
 // ─────────────────────────────────────────────────────────────
+// Calmar Ratio Benchmarks
+// ─────────────────────────────────────────────────────────────
+static void BM_CALMAR_Scalar(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.03, 0.03);
+    double periods_per_year = 252.0; // Daily returns
+    for (auto _ : state) {
+        auto res = calmar_ratio::scalar(returns, periods_per_year);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+static void BM_CALMAR_STD_SIMD(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.03, 0.03);
+    double periods_per_year = 252.0;
+    for (auto _ : state) {
+        auto res = calmar_ratio::simd(returns, periods_per_year);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+#if defined(__AVX512F__)
+static void BM_CALMAR_AVX512(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.03, 0.03);
+    double periods_per_year = 252.0;
+    for (auto _ : state) {
+        auto res = calmar_ratio::avx512(returns, periods_per_year);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#elif defined(__AVX2__)
+static void BM_CALMAR_AVX2(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.03, 0.03);
+    double periods_per_year = 252.0;
+    for (auto _ : state) {
+        auto res = calmar_ratio::avx2(returns, periods_per_year);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#endif
+
+// ─────────────────────────────────────────────────────────────
 // Benchmark Registration
 // ─────────────────────────────────────────────────────────────
 BENCHMARK(BM_VWAP_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
@@ -464,6 +510,14 @@ BENCHMARK(BM_SORTINO_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 BENCHMARK(BM_SORTINO_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #elif defined(__AVX2__)
 BENCHMARK(BM_SORTINO_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#endif
+
+BENCHMARK(BM_CALMAR_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+BENCHMARK(BM_CALMAR_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#if defined(__AVX512F__)
+BENCHMARK(BM_CALMAR_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#elif defined(__AVX2__)
+BENCHMARK(BM_CALMAR_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #endif
 
 BENCHMARK_MAIN();
