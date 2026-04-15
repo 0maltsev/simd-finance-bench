@@ -29,7 +29,7 @@ inline double scalar(std::span<const double> bid_vol, std::span<const double> as
 }
 
 // ─────────────────────────────────────────────────────────────
-// 2. std::simd (experimental) - P1928 compliant
+// 2. std::simd (experimental) - P1928 + GCC 14 compatible
 // ─────────────────────────────────────────────────────────────
 inline double simd(std::span<const double> bid_vol, std::span<const double> ask_vol, double threshold) {
     using V = std::experimental::simd<double>;
@@ -45,25 +45,36 @@ inline double simd(std::span<const double> bid_vol, std::span<const double> ask_
         V b(&bid_vol[i], std::experimental::element_aligned);
         V a(&ask_vol[i], std::experimental::element_aligned);
 
-        // 1. Mask creation (branch-free predicate evaluation)
-        M valid = (b + a) > 1e-9;
-        M in_range = (b > a ? b - a : a - b) < v_thresh; // abs(diff) < threshold
+        // 1. Mask creation (branch-free predicates)
+        M valid = (b + a) > V{1e-9};
+
+        // ✅ Fix #1: abs() via element-wise max (ternary ?: doesn't work with masks)
+        V diff = b - a;
+        V abs_diff = std::experimental::max(diff, -diff);
+        M in_range = abs_diff < v_thresh;
+
         M cond = valid & in_range;
 
-        // 2. Core computation (executed for all lanes, results conditionally kept)
+        // 2. Core computation (executed for all lanes)
         V den = b + a;
-        V num = b - a;
-        V imb = num / den;
+        V imb = diff / den;
 
         // 3. P1928 masked accumulation (proxy assignment)
-        // ✅ This compiles to vblendvpd / k-mask blend in GCC 14
         std::experimental::where(cond, sum) = sum + imb;
         std::experimental::where(cond, count) = count + V{1.0};
     }
 
-    // Horizontal reduction
-    double s_sum = std::experimental::hsum(sum);
-    double s_count = std::experimental::hsum(count);
+    // ✅ Fix #2: Manual reduction via copy_to (hsum not available in GCC 14 libstdc++)
+    alignas(64) double buf_sum[8];  // 8 >= max simd_size for double on x86
+    alignas(64) double buf_cnt[8];
+    sum.copy_to(buf_sum, std::experimental::element_aligned);
+    count.copy_to(buf_cnt, std::experimental::element_aligned);
+
+    double s_sum = 0.0, s_count = 0.0;
+    for (size_t k = 0; k < vec_len; ++k) {
+        s_sum += buf_sum[k];
+        s_count += buf_cnt[k];
+    }
 
     // Scalar tail
     const double thresh = threshold;
@@ -95,14 +106,13 @@ inline double avx512(std::span<const double> bid_vol, std::span<const double> as
 
         __mmask8 valid = _mm512_cmp_pd_mask(b + a, _mm512_set1_pd(1e-9), _CMP_GT_OS);
         __m512d diff = b - a;
-        __m512d abs_diff = _mm512_max_pd(_mm512_sub_pd(_mm512_setzero_pd(), diff), diff);
+        __m512d abs_diff = _mm512_max_pd(diff, _mm512_sub_pd(_mm512_setzero_pd(), diff));
         __mmask8 in_range = _mm512_cmp_pd_mask(abs_diff, v_thresh, _CMP_LT_OS);
         __mmask8 cond = valid & in_range;
 
         __m512d den = b + a;
         __m512d imb = diff / den;
 
-        // ✅ AVX-512 native mask-add: 1 instruction, zero branch divergence
         sum = _mm512_mask_add_pd(sum, cond, sum, imb);
         count = _mm512_mask_add_pd(count, cond, count, _mm512_set1_pd(1.0));
     }
@@ -134,7 +144,7 @@ inline double avx2(std::span<const double> bid_vol, std::span<const double> ask_
         __m256d valid = _mm256_cmp_pd(den, _mm256_set1_pd(1e-9), _CMP_GT_OS);
 
         __m256d diff = _mm256_sub_pd(b, a);
-        __m256d abs_diff = _mm256_max_pd(_mm256_sub_pd(zero, diff), diff);
+        __m256d abs_diff = _mm256_max_pd(diff, _mm256_sub_pd(zero, diff));
         __m256d in_range = _mm256_cmp_pd(abs_diff, v_thresh, _CMP_LT_OS);
         __m256d cond = _mm256_and_pd(valid, in_range);
 
@@ -142,12 +152,11 @@ inline double avx2(std::span<const double> bid_vol, std::span<const double> ask_
         __m256d add_sum = _mm256_add_pd(sum, imb);
         __m256d add_cnt = _mm256_add_pd(count, _mm256_set1_pd(1.0));
 
-        // ✅ AVX2 blend-based conditional update
         sum = _mm256_blendv_pd(sum, add_sum, cond);
         count = _mm256_blendv_pd(count, add_cnt, cond);
     }
 
-    // Manual reduction (AVX2 lacks single-instruction reduce)
+    // Manual reduction for AVX2
     sum = _mm256_hadd_pd(sum, sum); sum = _mm256_hadd_pd(sum, sum);
     double s_sum = _mm_cvtsd_f64(_mm256_extractf128_pd(sum, 0)) + _mm_cvtsd_f64(_mm256_extractf128_pd(sum, 1));
 
