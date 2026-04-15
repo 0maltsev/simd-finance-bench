@@ -15,6 +15,7 @@
 #include "kernels/correlation.hpp"
 #include "kernels/beta.hpp"
 #include "kernels/alpha.hpp"
+#include "kernels/var.hpp"
 
 // ─────────────────────────────────────────────────────────────
 // Data Generation Helpers (deterministic, seed=42)
@@ -630,6 +631,51 @@ static void BM_ALPHA_AVX2(benchmark::State& state) {
 #endif
 
 // ─────────────────────────────────────────────────────────────
+// VaR Benchmarks (Historical Value at Risk)
+// ─────────────────────────────────────────────────────────────
+static void BM_VAR_Scalar(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double confidence = 0.95; // 95% VaR
+    for (auto _ : state) {
+        auto res = var::scalar(returns, confidence);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+static void BM_VAR_STD_SIMD(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double confidence = 0.95;
+    for (auto _ : state) {
+        auto res = var::simd(returns, confidence);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+#if defined(__AVX512F__)
+static void BM_VAR_AVX512(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double confidence = 0.95;
+    for (auto _ : state) {
+        auto res = var::avx512(returns, confidence);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#elif defined(__AVX2__)
+static void BM_VAR_AVX2(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double confidence = 0.95;
+    for (auto _ : state) {
+        auto res = var::avx2(returns, confidence);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#endif
+
+// ─────────────────────────────────────────────────────────────
 // Benchmark Registration
 // ─────────────────────────────────────────────────────────────
 BENCHMARK(BM_VWAP_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
@@ -734,6 +780,14 @@ BENCHMARK(BM_ALPHA_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 BENCHMARK(BM_ALPHA_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #elif defined(__AVX2__)
 BENCHMARK(BM_ALPHA_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#endif
+
+BENCHMARK(BM_VAR_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+BENCHMARK(BM_VAR_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#if defined(__AVX512F__)
+BENCHMARK(BM_VAR_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#elif defined(__AVX2__)
+BENCHMARK(BM_VAR_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #endif
 
 BENCHMARK_MAIN();
