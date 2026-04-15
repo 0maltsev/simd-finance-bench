@@ -16,6 +16,7 @@
 #include "kernels/beta.hpp"
 #include "kernels/alpha.hpp"
 #include "kernels/var.hpp"
+#include "kernels/convolution.hpp"
 
 // ─────────────────────────────────────────────────────────────
 // Data Generation Helpers (deterministic, seed=42)
@@ -676,6 +677,59 @@ static void BM_VAR_AVX2(benchmark::State& state) {
 #endif
 
 // ─────────────────────────────────────────────────────────────
+// Convolution Benchmarks (FIR Filter)
+// ─────────────────────────────────────────────────────────────
+static std::vector<double> GenerateKernel(size_t size) {
+    std::vector<double> kernel(size);
+    std::mt19937_64 rng(42);
+    std::uniform_real_distribution<double> dist(-1.0, 1.0);
+    for (auto& x : kernel) x = dist(rng);
+    return kernel;
+}
+
+static void BM_CONVOLUTION_Scalar(benchmark::State& state) {
+    std::vector<double> input = GenerateData(state.range(0), -0.05, 0.05);
+    std::vector<double> kernel = GenerateKernel(9); // Typical kernel size
+    for (auto _ : state) {
+        auto res = convolution::scalar(input, kernel);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+static void BM_CONVOLUTION_STD_SIMD(benchmark::State& state) {
+    std::vector<double> input = GenerateData(state.range(0), -0.05, 0.05);
+    std::vector<double> kernel = GenerateKernel(9);
+    for (auto _ : state) {
+        auto res = convolution::simd(input, kernel);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+#if defined(__AVX512F__)
+static void BM_CONVOLUTION_AVX512(benchmark::State& state) {
+    std::vector<double> input = GenerateData(state.range(0), -0.05, 0.05);
+    std::vector<double> kernel = GenerateKernel(9);
+    for (auto _ : state) {
+        auto res = convolution::avx512(input, kernel);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#elif defined(__AVX2__)
+static void BM_CONVOLUTION_AVX2(benchmark::State& state) {
+    std::vector<double> input = GenerateData(state.range(0), -0.05, 0.05);
+    std::vector<double> kernel = GenerateKernel(9);
+    for (auto _ : state) {
+        auto res = convolution::avx2(input, kernel);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#endif
+
+// ─────────────────────────────────────────────────────────────
 // Benchmark Registration
 // ─────────────────────────────────────────────────────────────
 BENCHMARK(BM_VWAP_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
@@ -788,6 +842,14 @@ BENCHMARK(BM_VAR_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 BENCHMARK(BM_VAR_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #elif defined(__AVX2__)
 BENCHMARK(BM_VAR_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#endif
+
+BENCHMARK(BM_CONVOLUTION_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+BENCHMARK(BM_CONVOLUTION_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#if defined(__AVX512F__)
+BENCHMARK(BM_CONVOLUTION_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#elif defined(__AVX2__)
+BENCHMARK(BM_CONVOLUTION_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #endif
 
 BENCHMARK_MAIN();
