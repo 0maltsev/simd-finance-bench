@@ -5,6 +5,7 @@
 #include "kernels/vwap.hpp"
 #include "kernels/ewma.hpp"
 #include "kernels/book_imbalance.hpp"
+#include "kernels/kyle_lambda.hpp"
 
 // ─────────────────────────────────────────────────────────────
 // Data Generation Helpers (deterministic, seed=42)
@@ -162,6 +163,51 @@ static void BM_BOOK_IMB_AVX2(benchmark::State& state) {
 #endif
 
 // ─────────────────────────────────────────────────────────────
+// Kyle Lambda Benchmarks
+// ─────────────────────────────────────────────────────────────
+static void BM_KYLE_LAMBDA_Scalar(benchmark::State& state) {
+    std::vector<double> dp = GenerateData(state.range(0), -1.0, 1.0);   // price changes
+    std::vector<double> dq = GenerateData(state.range(0), 10.0, 1000.0); // volume changes
+    for (auto _ : state) {
+        auto res = kyle_lambda::scalar(dp, dq);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 2);
+}
+
+static void BM_KYLE_LAMBDA_STD_SIMD(benchmark::State& state) {
+    std::vector<double> dp = GenerateData(state.range(0), -1.0, 1.0);
+    std::vector<double> dq = GenerateData(state.range(0), 10.0, 1000.0);
+    for (auto _ : state) {
+        auto res = kyle_lambda::simd(dp, dq);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 2);
+}
+
+#if defined(__AVX512F__)
+static void BM_KYLE_LAMBDA_AVX512(benchmark::State& state) {
+    std::vector<double> dp = GenerateData(state.range(0), -1.0, 1.0);
+    std::vector<double> dq = GenerateData(state.range(0), 10.0, 1000.0);
+    for (auto _ : state) {
+        auto res = kyle_lambda::avx512(dp, dq);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 2);
+}
+#elif defined(__AVX2__)
+static void BM_KYLE_LAMBDA_AVX2(benchmark::State& state) {
+    std::vector<double> dp = GenerateData(state.range(0), -1.0, 1.0);
+    std::vector<double> dq = GenerateData(state.range(0), 10.0, 1000.0);
+    for (auto _ : state) {
+        auto res = kyle_lambda::avx2(dp, dq);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 2);
+}
+#endif
+
+// ─────────────────────────────────────────────────────────────
 // Benchmark Registration
 // ─────────────────────────────────────────────────────────────
 BENCHMARK(BM_VWAP_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
@@ -186,6 +232,14 @@ BENCHMARK(BM_BOOK_IMB_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 BENCHMARK(BM_BOOK_IMB_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #elif defined(__AVX2__)
 BENCHMARK(BM_BOOK_IMB_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#endif
+
+BENCHMARK(BM_KYLE_LAMBDA_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+BENCHMARK(BM_KYLE_LAMBDA_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#if defined(__AVX512F__)
+BENCHMARK(BM_KYLE_LAMBDA_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#elif defined(__AVX2__)
+BENCHMARK(BM_KYLE_LAMBDA_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #endif
 
 BENCHMARK_MAIN();
