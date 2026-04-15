@@ -6,6 +6,7 @@
 #include "kernels/ewma.hpp"
 #include "kernels/book_imbalance.hpp"
 #include "kernels/kyle_lambda.hpp"
+#include "kernels/atr.hpp"
 
 // ─────────────────────────────────────────────────────────────
 // Data Generation Helpers (deterministic, seed=42)
@@ -208,6 +209,60 @@ static void BM_KYLE_LAMBDA_AVX2(benchmark::State& state) {
 #endif
 
 // ─────────────────────────────────────────────────────────────
+// ATR Benchmarks
+// ─────────────────────────────────────────────────────────────
+static void BM_ATR_Scalar(benchmark::State& state) {
+    std::vector<double> high = GenerateData(state.range(0), 150.0, 250.0);
+    std::vector<double> low  = GenerateData(state.range(0), 140.0, 240.0);
+    std::vector<double> close = GenerateData(state.range(0), 145.0, 245.0);
+    double period = 14.0;
+    for (auto _ : state) {
+        auto res = atr::scalar(high, low, close, period);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 3);
+}
+
+static void BM_ATR_STD_SIMD(benchmark::State& state) {
+    std::vector<double> high = GenerateData(state.range(0), 150.0, 250.0);
+    std::vector<double> low  = GenerateData(state.range(0), 140.0, 240.0);
+    std::vector<double> close = GenerateData(state.range(0), 145.0, 245.0);
+    double period = 14.0;
+    for (auto _ : state) {
+        auto res = atr::simd(high, low, close, period);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 3);
+}
+
+#if defined(__AVX512F__)
+static void BM_ATR_AVX512(benchmark::State& state) {
+    std::vector<double> high = GenerateData(state.range(0), 150.0, 250.0);
+    std::vector<double> low  = GenerateData(state.range(0), 140.0, 240.0);
+    std::vector<double> close = GenerateData(state.range(0), 145.0, 245.0);
+    double period = 14.0;
+    for (auto _ : state) {
+        auto res = atr::avx512(high, low, close, period);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 3);
+}
+#elif defined(__AVX2__)
+static void BM_ATR_AVX2(benchmark::State& state) {
+    std::vector<double> high = GenerateData(state.range(0), 150.0, 250.0);
+    std::vector<double> low  = GenerateData(state.range(0), 140.0, 240.0);
+    std::vector<double> close = GenerateData(state.range(0), 145.0, 245.0);
+    double period = 14.0;
+    for (auto _ : state) {
+        auto res = atr::avx2(high, low, close, period);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 3);
+}
+#endif
+
+
+// ─────────────────────────────────────────────────────────────
 // Benchmark Registration
 // ─────────────────────────────────────────────────────────────
 BENCHMARK(BM_VWAP_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
@@ -240,6 +295,14 @@ BENCHMARK(BM_KYLE_LAMBDA_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 BENCHMARK(BM_KYLE_LAMBDA_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #elif defined(__AVX2__)
 BENCHMARK(BM_KYLE_LAMBDA_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#endif
+
+BENCHMARK(BM_ATR_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+BENCHMARK(BM_ATR_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#if defined(__AVX512F__)
+BENCHMARK(BM_ATR_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#elif defined(__AVX2__)
+BENCHMARK(BM_ATR_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #endif
 
 BENCHMARK_MAIN();
