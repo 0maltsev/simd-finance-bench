@@ -8,6 +8,7 @@
 #include "kernels/kyle_lambda.hpp"
 #include "kernels/atr.hpp"
 #include "kernels/rsi.hpp"
+#include "kernels/sharpe_ratio.hpp"
 
 // ─────────────────────────────────────────────────────────────
 // Data Generation Helpers (deterministic, seed=42)
@@ -308,6 +309,51 @@ static void BM_RSI_AVX2(benchmark::State& state) {
 #endif
 
 // ─────────────────────────────────────────────────────────────
+// Sharpe Ratio Benchmarks
+// ─────────────────────────────────────────────────────────────
+static void BM_SHARPE_Scalar(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05); // Daily returns
+    double risk_free = 0.02 / 252; // Daily risk-free rate (2% annual)
+    for (auto _ : state) {
+        auto res = sharpe_ratio::scalar(returns, risk_free);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+static void BM_SHARPE_STD_SIMD(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double risk_free = 0.02 / 252;
+    for (auto _ : state) {
+        auto res = sharpe_ratio::simd(returns, risk_free);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+#if defined(__AVX512F__)
+static void BM_SHARPE_AVX512(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double risk_free = 0.02 / 252;
+    for (auto _ : state) {
+        auto res = sharpe_ratio::avx512(returns, risk_free);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#elif defined(__AVX2__)
+static void BM_SHARPE_AVX2(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double risk_free = 0.02 / 252;
+    for (auto _ : state) {
+        auto res = sharpe_ratio::avx2(returns, risk_free);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#endif
+
+// ─────────────────────────────────────────────────────────────
 // Benchmark Registration
 // ─────────────────────────────────────────────────────────────
 BENCHMARK(BM_VWAP_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
@@ -356,6 +402,14 @@ BENCHMARK(BM_RSI_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 BENCHMARK(BM_RSI_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #elif defined(__AVX2__)
 BENCHMARK(BM_RSI_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#endif
+
+BENCHMARK(BM_SHARPE_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+BENCHMARK(BM_SHARPE_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#if defined(__AVX512F__)
+BENCHMARK(BM_SHARPE_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#elif defined(__AVX2__)
+BENCHMARK(BM_SHARPE_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #endif
 
 BENCHMARK_MAIN();
