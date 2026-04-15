@@ -13,6 +13,7 @@
 #include "kernels/calmar_ratio.hpp"
 #include "kernels/max_drawdown.hpp"
 #include "kernels/correlation.hpp"
+#include "kernels/beta.hpp"
 
 // ─────────────────────────────────────────────────────────────
 // Data Generation Helpers (deterministic, seed=42)
@@ -534,6 +535,52 @@ static void BM_CORRELATION_AVX2(benchmark::State& state) {
 #endif
 
 // ─────────────────────────────────────────────────────────────
+// Beta Benchmarks (CAPM Beta)
+// ─────────────────────────────────────────────────────────────
+static void BM_BETA_Scalar(benchmark::State& state) {
+    std::vector<double> asset  = GenerateData(state.range(0), -0.05, 0.05);
+    std::vector<double> market = GenerateData(state.range(0), -0.05, 0.05);
+    for (auto _ : state) {
+        auto res = beta::scalar(asset, market);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 2);
+}
+
+static void BM_BETA_STD_SIMD(benchmark::State& state) {
+    std::vector<double> asset  = GenerateData(state.range(0), -0.05, 0.05);
+    std::vector<double> market = GenerateData(state.range(0), -0.05, 0.05);
+    for (auto _ : state) {
+        auto res = beta::simd(asset, market);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 2);
+}
+
+#if defined(__AVX512F__)
+static void BM_BETA_AVX512(benchmark::State& state) {
+    std::vector<double> asset  = GenerateData(state.range(0), -0.05, 0.05);
+    std::vector<double> market = GenerateData(state.range(0), -0.05, 0.05);
+    for (auto _ : state) {
+        auto res = beta::avx512(asset, market);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 2);
+}
+#elif defined(__AVX2__)
+static void BM_BETA_AVX2(benchmark::State& state) {
+    std::vector<double> asset  = GenerateData(state.range(0), -0.05, 0.05);
+    std::vector<double> market = GenerateData(state.range(0), -0.05, 0.05);
+    for (auto _ : state) {
+        auto res = beta::avx2(asset, market);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 2);
+}
+#endif
+
+
+// ─────────────────────────────────────────────────────────────
 // Benchmark Registration
 // ─────────────────────────────────────────────────────────────
 BENCHMARK(BM_VWAP_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
@@ -622,6 +669,14 @@ BENCHMARK(BM_CORRELATION_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 BENCHMARK(BM_CORRELATION_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #elif defined(__AVX2__)
 BENCHMARK(BM_CORRELATION_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#endif
+
+BENCHMARK(BM_BETA_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+BENCHMARK(BM_BETA_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#if defined(__AVX512F__)
+BENCHMARK(BM_BETA_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#elif defined(__AVX2__)
+BENCHMARK(BM_BETA_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #endif
 
 BENCHMARK_MAIN();
