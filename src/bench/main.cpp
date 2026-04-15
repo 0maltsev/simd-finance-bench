@@ -14,6 +14,7 @@
 #include "kernels/max_drawdown.hpp"
 #include "kernels/correlation.hpp"
 #include "kernels/beta.hpp"
+#include "kernels/alpha.hpp"
 
 // ─────────────────────────────────────────────────────────────
 // Data Generation Helpers (deterministic, seed=42)
@@ -579,6 +580,54 @@ static void BM_BETA_AVX2(benchmark::State& state) {
 }
 #endif
 
+// ─────────────────────────────────────────────────────────────
+// Alpha Benchmarks (Jensen's Alpha)
+// ─────────────────────────────────────────────────────────────
+static void BM_ALPHA_Scalar(benchmark::State& state) {
+    std::vector<double> asset  = GenerateData(state.range(0), -0.05, 0.05);
+    std::vector<double> market = GenerateData(state.range(0), -0.05, 0.05);
+    double risk_free = 0.02 / 252; // Daily risk-free rate (2% annual)
+    for (auto _ : state) {
+        auto res = alpha::scalar(asset, market, risk_free);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 2);
+}
+
+static void BM_ALPHA_STD_SIMD(benchmark::State& state) {
+    std::vector<double> asset  = GenerateData(state.range(0), -0.05, 0.05);
+    std::vector<double> market = GenerateData(state.range(0), -0.05, 0.05);
+    double risk_free = 0.02 / 252;
+    for (auto _ : state) {
+        auto res = alpha::simd(asset, market, risk_free);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 2);
+}
+
+#if defined(__AVX512F__)
+static void BM_ALPHA_AVX512(benchmark::State& state) {
+    std::vector<double> asset  = GenerateData(state.range(0), -0.05, 0.05);
+    std::vector<double> market = GenerateData(state.range(0), -0.05, 0.05);
+    double risk_free = 0.02 / 252;
+    for (auto _ : state) {
+        auto res = alpha::avx512(asset, market, risk_free);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 2);
+}
+#elif defined(__AVX2__)
+static void BM_ALPHA_AVX2(benchmark::State& state) {
+    std::vector<double> asset  = GenerateData(state.range(0), -0.05, 0.05);
+    std::vector<double> market = GenerateData(state.range(0), -0.05, 0.05);
+    double risk_free = 0.02 / 252;
+    for (auto _ : state) {
+        auto res = alpha::avx2(asset, market, risk_free);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double) * 2);
+}
+#endif
 
 // ─────────────────────────────────────────────────────────────
 // Benchmark Registration
@@ -677,6 +726,14 @@ BENCHMARK(BM_BETA_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 BENCHMARK(BM_BETA_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #elif defined(__AVX2__)
 BENCHMARK(BM_BETA_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#endif
+
+BENCHMARK(BM_ALPHA_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+BENCHMARK(BM_ALPHA_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#if defined(__AVX512F__)
+BENCHMARK(BM_ALPHA_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#elif defined(__AVX2__)
+BENCHMARK(BM_ALPHA_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #endif
 
 BENCHMARK_MAIN();
