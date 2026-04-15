@@ -9,6 +9,7 @@
 #include "kernels/atr.hpp"
 #include "kernels/rsi.hpp"
 #include "kernels/sharpe_ratio.hpp"
+#include "kernels/sortino_ratio.hpp"
 
 // ─────────────────────────────────────────────────────────────
 // Data Generation Helpers (deterministic, seed=42)
@@ -354,6 +355,51 @@ static void BM_SHARPE_AVX2(benchmark::State& state) {
 #endif
 
 // ─────────────────────────────────────────────────────────────
+// Sortino Ratio Benchmarks
+// ─────────────────────────────────────────────────────────────
+static void BM_SORTINO_Scalar(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double target = 0.0; // Zero target (common in practice)
+    for (auto _ : state) {
+        auto res = sortino_ratio::scalar(returns, target);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+static void BM_SORTINO_STD_SIMD(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double target = 0.0;
+    for (auto _ : state) {
+        auto res = sortino_ratio::simd(returns, target);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+#if defined(__AVX512F__)
+static void BM_SORTINO_AVX512(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double target = 0.0;
+    for (auto _ : state) {
+        auto res = sortino_ratio::avx512(returns, target);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#elif defined(__AVX2__)
+static void BM_SORTINO_AVX2(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double target = 0.0;
+    for (auto _ : state) {
+        auto res = sortino_ratio::avx2(returns, target);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#endif
+
+// ─────────────────────────────────────────────────────────────
 // Benchmark Registration
 // ─────────────────────────────────────────────────────────────
 BENCHMARK(BM_VWAP_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
@@ -410,6 +456,14 @@ BENCHMARK(BM_SHARPE_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 BENCHMARK(BM_SHARPE_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #elif defined(__AVX2__)
 BENCHMARK(BM_SHARPE_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#endif
+
+BENCHMARK(BM_SORTINO_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+BENCHMARK(BM_SORTINO_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#if defined(__AVX512F__)
+BENCHMARK(BM_SORTINO_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#elif defined(__AVX2__)
+BENCHMARK(BM_SORTINO_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #endif
 
 BENCHMARK_MAIN();
