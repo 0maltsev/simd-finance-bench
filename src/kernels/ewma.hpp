@@ -44,7 +44,7 @@ inline double simd(std::span<const double> data, double alpha) {
         // Mask: skip stale/invalid ticks
         auto valid = x > 0.0;
 
-        v_s[valid] = new_s;
+        std::experimental::where(valid, v_s) = new_s;
 
         // Propagate last lane to scalar state
         s = v_s[vec_len - 1];
