@@ -11,6 +11,7 @@
 #include "kernels/sharpe_ratio.hpp"
 #include "kernels/sortino_ratio.hpp"
 #include "kernels/calmar_ratio.hpp"
+#include "kernels/max_drawdown.hpp"
 
 // ─────────────────────────────────────────────────────────────
 // Data Generation Helpers (deterministic, seed=42)
@@ -446,6 +447,47 @@ static void BM_CALMAR_AVX2(benchmark::State& state) {
 #endif
 
 // ─────────────────────────────────────────────────────────────
+// Max Drawdown Benchmarks
+// ─────────────────────────────────────────────────────────────
+static void BM_MAX_DD_Scalar(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.03, 0.03);
+    for (auto _ : state) {
+        auto res = max_drawdown::scalar(returns);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+static void BM_MAX_DD_STD_SIMD(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.03, 0.03);
+    for (auto _ : state) {
+        auto res = max_drawdown::simd(returns);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+#if defined(__AVX512F__)
+static void BM_MAX_DD_AVX512(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.03, 0.03);
+    for (auto _ : state) {
+        auto res = max_drawdown::avx512(returns);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#elif defined(__AVX2__)
+static void BM_MAX_DD_AVX2(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.03, 0.03);
+    for (auto _ : state) {
+        auto res = max_drawdown::avx2(returns);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#endif
+
+// ─────────────────────────────────────────────────────────────
 // Benchmark Registration
 // ─────────────────────────────────────────────────────────────
 BENCHMARK(BM_VWAP_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
@@ -518,6 +560,14 @@ BENCHMARK(BM_CALMAR_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 BENCHMARK(BM_CALMAR_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #elif defined(__AVX2__)
 BENCHMARK(BM_CALMAR_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#endif
+
+BENCHMARK(BM_MAX_DD_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+BENCHMARK(BM_MAX_DD_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#if defined(__AVX512F__)
+BENCHMARK(BM_MAX_DD_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#elif defined(__AVX2__)
+BENCHMARK(BM_MAX_DD_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #endif
 
 BENCHMARK_MAIN();
