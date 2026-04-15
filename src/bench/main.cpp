@@ -7,6 +7,7 @@
 #include "kernels/book_imbalance.hpp"
 #include "kernels/kyle_lambda.hpp"
 #include "kernels/atr.hpp"
+#include "kernels/rsi.hpp"
 
 // ─────────────────────────────────────────────────────────────
 // Data Generation Helpers (deterministic, seed=42)
@@ -261,6 +262,50 @@ static void BM_ATR_AVX2(benchmark::State& state) {
 }
 #endif
 
+// ─────────────────────────────────────────────────────────────
+// RSI Benchmarks
+// ─────────────────────────────────────────────────────────────
+static void BM_RSI_Scalar(benchmark::State& state) {
+    std::vector<double> close = GenerateData(state.range(0), 145.0, 245.0);
+    double period = 14.0;
+    for (auto _ : state) {
+        auto res = rsi::scalar(close, period);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+static void BM_RSI_STD_SIMD(benchmark::State& state) {
+    std::vector<double> close = GenerateData(state.range(0), 145.0, 245.0);
+    double period = 14.0;
+    for (auto _ : state) {
+        auto res = rsi::simd(close, period);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+#if defined(__AVX512F__)
+static void BM_RSI_AVX512(benchmark::State& state) {
+    std::vector<double> close = GenerateData(state.range(0), 145.0, 245.0);
+    double period = 14.0;
+    for (auto _ : state) {
+        auto res = rsi::avx512(close, period);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#elif defined(__AVX2__)
+static void BM_RSI_AVX2(benchmark::State& state) {
+    std::vector<double> close = GenerateData(state.range(0), 145.0, 245.0);
+    double period = 14.0;
+    for (auto _ : state) {
+        auto res = rsi::avx2(close, period);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#endif
 
 // ─────────────────────────────────────────────────────────────
 // Benchmark Registration
@@ -303,6 +348,14 @@ BENCHMARK(BM_ATR_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 BENCHMARK(BM_ATR_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #elif defined(__AVX2__)
 BENCHMARK(BM_ATR_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#endif
+
+BENCHMARK(BM_RSI_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+BENCHMARK(BM_RSI_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#if defined(__AVX512F__)
+BENCHMARK(BM_RSI_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#elif defined(__AVX2__)
+BENCHMARK(BM_RSI_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #endif
 
 BENCHMARK_MAIN();
