@@ -17,6 +17,7 @@
 #include "kernels/alpha.hpp"
 #include "kernels/var.hpp"
 #include "kernels/convolution.hpp"
+#include "kernels/cvar.hpp"
 
 // ─────────────────────────────────────────────────────────────
 // Data Generation Helpers (deterministic, seed=42)
@@ -730,6 +731,51 @@ static void BM_CONVOLUTION_AVX2(benchmark::State& state) {
 #endif
 
 // ─────────────────────────────────────────────────────────────
+// CVaR Benchmarks (Conditional VaR / Expected Shortfall)
+// ─────────────────────────────────────────────────────────────
+static void BM_CVAR_Scalar(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double confidence = 0.95; // 95% CVaR
+    for (auto _ : state) {
+        auto res = cvar::scalar(returns, confidence);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+static void BM_CVAR_STD_SIMD(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double confidence = 0.95;
+    for (auto _ : state) {
+        auto res = cvar::simd(returns, confidence);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+
+#if defined(__AVX512F__)
+static void BM_CVAR_AVX512(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double confidence = 0.95;
+    for (auto _ : state) {
+        auto res = cvar::avx512(returns, confidence);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#elif defined(__AVX2__)
+static void BM_CVAR_AVX2(benchmark::State& state) {
+    std::vector<double> returns = GenerateData(state.range(0), -0.05, 0.05);
+    double confidence = 0.95;
+    for (auto _ : state) {
+        auto res = cvar::avx2(returns, confidence);
+        benchmark::DoNotOptimize(res);
+    }
+    state.SetBytesProcessed(state.iterations() * state.range(0) * sizeof(double));
+}
+#endif
+
+// ─────────────────────────────────────────────────────────────
 // Benchmark Registration
 // ─────────────────────────────────────────────────────────────
 BENCHMARK(BM_VWAP_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
@@ -850,6 +896,14 @@ BENCHMARK(BM_CONVOLUTION_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 BENCHMARK(BM_CONVOLUTION_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #elif defined(__AVX2__)
 BENCHMARK(BM_CONVOLUTION_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#endif
+
+BENCHMARK(BM_CVAR_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+BENCHMARK(BM_CVAR_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#if defined(__AVX512F__)
+BENCHMARK(BM_CVAR_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+#elif defined(__AVX2__)
+BENCHMARK(BM_CVAR_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #endif
 
 BENCHMARK_MAIN();
