@@ -1,0 +1,22 @@
+\begin{table}[ht]
+\centering
+\caption{SIMD Speedup vs Scalar Baseline (~1M elements, median of 2 runs)}
+\label{tab:main-results}
+\begin{tabular}{@{}l l c@{}}
+\toprule
+\textbf{Kernel} & \textbf{Pattern Class} & \textbf{std::simd} \\
+\midrule
+ATR & Sliding Window + IIR & 1.08× \\
+Alpha & Multiple Reductions + Linear & 1.28× \\
+Beta & Multiple Reductions + Division & 1.27× \\
+CVaR & Selection + Tail Reduction & 1.00× \\
+Conv. & Sliding Window + FIR & 0.66× \\
+Corr. & Multiple Reductions + sqrt & 1.34× \\
+EWMA & Dependency chain (IIR) & 1.11× \\
+Kyle λ & Division-heavy & 1.11× \\
+RSI & Dual IIR + Masked & 2.29× \\
+VWAP & Reduction-heavy & 1.30× \\
+VaR & Selection / Sorting & 1.00× \\
+\bottomrule
+\end{tabular}
+\end{table}
