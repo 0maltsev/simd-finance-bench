@@ -104,6 +104,12 @@ def parse_benchmark_json(filepath: Path) -> pd.DataFrame:
             "scalar": "scalar",
             "simd": "std_simd",
             "std_simd": "std_simd",
+            # Intrinsics variants
+            "avx": "avx2",
+            "avx2": "avx2",
+            "sse": "sse4",
+            "sse4": "sse4",
+            "neon": "neon",
         }
         impl = impl_mapping.get(impl, impl)
 
@@ -398,7 +404,6 @@ def plot_pattern_heatmap(df: pd.DataFrame):
 def generate_latex_tables(df: pd.DataFrame):
     """Generate publication-ready LaTeX tables for Section 4."""
 
-    # Table 1: Main results (1M elements, median of runs)
     target_size = 1 << 20
     available_sizes = df["size"].unique()
     if target_size not in available_sizes and len(available_sizes) > 0:
@@ -416,22 +421,33 @@ def generate_latex_tables(df: pd.DataFrame):
         aggfunc="median"
     ).round(2)
 
-    # Format LaTeX
+    # Define column order for consistent output
+    impl_order = ["std_simd", "avx2", "sse4", "neon"]
+    available_cols = [c for c in impl_order if c in pivot.columns]
+
+    # Format LaTeX header dynamically
+    header_cols = " & ".join([r"\textbf{" + impl.replace("_", "::") + r"}" for impl in available_cols])
+
     tex_lines = [
         r"\begin{table}[ht]",
         r"\centering",
-        r"\caption{SIMD Speedup vs Scalar Baseline (~1M elements, median of 2 runs)}",
+        r"\caption{SIMD Speedup vs Scalar Baseline (~1M elements, median)}",
         r"\label{tab:main-results}",
-        r"\begin{tabular}{@{}l l c@{}}",
+        r"\begin{tabular}{@{}l l " + "c" * len(available_cols) + r"@{}}",
         r"\toprule",
-        r"\textbf{Kernel} & \textbf{Pattern Class} & \textbf{std::simd} \\",
+        r"\textbf{Kernel} & \textbf{Pattern Class} & " + header_cols + r" \\",
         r"\midrule"
     ]
 
     for (kernel, pattern), row in pivot.iterrows():
-        simd_val = row.get('std_simd', 0)
-        simd_formatted = f"{simd_val:.2f}×" if isinstance(simd_val, (int, float)) else "--"
-        tex_lines.append(f"{kernel} & {pattern} & {simd_formatted} \\\\")
+        values = []
+        for impl in available_cols:
+            val = row.get(impl)
+            if pd.notna(val) and isinstance(val, (int, float)):
+                values.append(f"{val:.2f}×")
+            else:
+                values.append("--")
+        tex_lines.append(f"{kernel} & {pattern} & " + " & ".join(values) + r" \\")
 
     tex_lines.extend([
         r"\bottomrule",
@@ -439,7 +455,6 @@ def generate_latex_tables(df: pd.DataFrame):
         r"\end{table}"
     ])
 
-    # Save Table 1
     with open(OUTPUT_TABLES / "main_results.tex", "w") as f:
         f.write("\n".join(tex_lines))
     print(f"✓ Saved: {OUTPUT_TABLES / 'main_results.tex'}")

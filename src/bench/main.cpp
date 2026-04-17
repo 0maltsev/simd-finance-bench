@@ -880,6 +880,7 @@ BENCHMARK(BM_ALPHA_STD_SIMD)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 BENCHMARK(BM_ALPHA_AVX512)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
 #elif defined(__AVX2__)
 BENCHMARK(BM_ALPHA_AVX2)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
+
 #endif
 
 BENCHMARK(BM_VAR_Scalar)->Arg(1 << 16)->Arg(1 << 20)->Arg(1 << 22);
