@@ -110,6 +110,7 @@ def parse_benchmark_json(filepath: Path) -> pd.DataFrame:
             "sse": "sse4",
             "sse4": "sse4",
             "neon": "neon",
+            "avx512": "avx512", # ✅ Added AVX-512 support
         }
         impl = impl_mapping.get(impl, impl)
 
@@ -222,21 +223,21 @@ def compute_speedup(df: pd.DataFrame) -> pd.DataFrame:
 # Visualization Functions
 # ─────────────────────────────────────────────────────────────
 def plot_speedup_by_pattern(df: pd.DataFrame):
-    """Figure 1: Speedup vs Scalar, grouped by pattern class."""
+    """Figure 1: Speedup vs Scalar, grouped by pattern class (std::simd + Intrinsics)."""
     if df.empty or "size" not in df.columns:
         print("   ⚠️  Skipping plot_speedup_by_pattern: empty DataFrame or missing 'size' column")
         return
 
-    plt.figure(figsize=(14, 8))
+    plt.figure(figsize=(14, 10))
 
     # Aggregate: median speedup at 1M elements (representative size)
     target_size = 1 << 20
     available_sizes = df["size"].unique()
     if target_size not in available_sizes and len(available_sizes) > 0:
-        # Use closest available size
         target_size = min(available_sizes, key=lambda x: abs(x - (1 << 20)))
         print(f"   [debug] Using alternative size {target_size} instead of 1M")
 
+    # Filter to target size and aggregate median speedup
     agg = df[(df["size"] == target_size)].groupby(["kernel", "pattern", "impl"])["speedup"].median().reset_index()
 
     if agg.empty:
@@ -245,27 +246,49 @@ def plot_speedup_by_pattern(df: pd.DataFrame):
 
     agg["kernel_display"] = agg["kernel"].map(KERNEL_NAMES)
 
-    # Pivot for grouped bar chart
+    # Pivot for grouped bar chart: index = kernels, columns = implementations
     pivot = agg.pivot_table(index=["kernel_display", "pattern"], columns="impl", values="speedup")
 
-    # Plot
-    color_map = {"std_simd": "#4E79A7"}
-    available_impls = [c for c in color_map.keys() if c in pivot.columns]
+    # Define color scheme for implementations
+    color_map = {
+        "std_simd": "#4E79A7",  # blue
+        "avx2": "#F28E2B",      # orange
+        "avx512": "#59A14F",    # green
+        "sse4": "#E15759",      # red
+        "neon": "#76B7B2",      # teal
+    }
+    # Filter to only available implementations
+    available_impls = [c for c in pivot.columns if c in color_map]
 
     if not available_impls:
         print("   ⚠️  No valid implementations found for plotting")
         return
 
-    ax = pivot[available_impls].plot(kind="barh", figsize=(14, 10),
-                                     color={k: color_map[k] for k in available_impls},
-                                     edgecolor="black", width=0.8)
+    # Plot grouped horizontal bar chart
+    ax = pivot[available_impls].plot(
+        kind="barh",
+        figsize=(14, 10),
+        color={k: color_map[k] for k in available_impls},
+        edgecolor="black",
+        width=0.8,
+        alpha=0.9
+    )
 
+    # Reference line: scalar baseline
     ax.axvline(x=1.0, color="gray", linestyle="--", linewidth=0.5, label="Scalar baseline")
+
+    # Labels and title
     ax.set_xlabel("Speedup vs Scalar (higher is better)")
     ax.set_ylabel("Kernel")
     ax.set_title("Figure 1: SIMD Speedup by Pattern Class (~1M elements, median)")
-    ax.legend(title="Implementation", loc="lower right")
-    ax.grid(axis="x", alpha=0.3)
+
+    # Legend with implementation names
+    ax.legend(title="Implementation", loc="lower right", frameon=True)
+    ax.grid(axis="x", alpha=0.3, linestyle=":")
+
+    # Add value labels on bars for clarity (optional)
+    for container in ax.containers:
+        ax.bar_label(container, fmt="%.1f×", padding=2, fontsize=7)
 
     plt.tight_layout()
     plt.savefig(OUTPUT_FIGURES / "speedup_by_pattern.pdf", bbox_inches="tight", dpi=300)
@@ -380,7 +403,7 @@ def plot_pattern_heatmap(df: pd.DataFrame):
     pivot = agg.pivot(index="pattern", columns="impl", values="speedup")
 
     # Reorder columns
-    impl_order = ["std_simd"]
+    impl_order = ["std_simd", "avx2", "avx512", "sse4", "neon"]
     pivot = pivot[[c for c in impl_order if c in pivot.columns]]
 
     # Plot heatmap
@@ -422,7 +445,7 @@ def generate_latex_tables(df: pd.DataFrame):
     ).round(2)
 
     # Define column order for consistent output
-    impl_order = ["std_simd", "avx2", "sse4", "neon"]
+    impl_order = ["std_simd", "avx2", "avx512", "sse4", "neon"]
     available_cols = [c for c in impl_order if c in pivot.columns]
 
     # Format LaTeX header dynamically
@@ -457,7 +480,7 @@ def generate_latex_tables(df: pd.DataFrame):
 
     with open(OUTPUT_TABLES / "main_results.tex", "w") as f:
         f.write("\n".join(tex_lines))
-    print(f"✓ Saved: {OUTPUT_TABLES / 'main_results.tex'}")
+    print(f"✓ Saved: {OUTPUT_FIGURES / 'main_results.tex'}")
 
 
 # ─────────────────────────────────────────────────────────────

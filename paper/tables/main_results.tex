@@ -4,18 +4,18 @@
 \label{tab:main-results}
 \begin{tabular}{@{}l l cc@{}}
 \toprule
-\textbf{Kernel} & \textbf{Pattern Class} & \textbf{std::simd} & \textbf{avx2} \\
+\textbf{Kernel} & \textbf{Pattern Class} & \textbf{std::simd} & \textbf{avx512} \\
 \midrule
-ATR & Sliding Window + IIR & 1.33× & 1.37× \\
-Alpha & Multiple Reductions + Linear & 1.33× & 1.31× \\
-Beta & Multiple Reductions + Division & 1.21× & 1.21× \\
-CVaR & Selection + Tail Reduction & 1.05× & 1.00× \\
-Corr. & Multiple Reductions + sqrt & 1.78× & 1.81× \\
-EWMA & Dependency chain (IIR) & 1.09× & 1.51× \\
-Kyle λ & Division-heavy & 1.32× & 1.45× \\
-RSI & Dual IIR + Masked & 2.67× & 3.02× \\
-VWAP & Reduction-heavy & 1.15× & 1.24× \\
-VaR & Selection / Sorting & 1.00× & 0.96× \\
+ATR & Sliding Window + IIR & 1.13× & 1.07× \\
+Alpha & Multiple Reductions + Linear & 1.74× & 1.80× \\
+Beta & Multiple Reductions + Division & 1.80× & 1.78× \\
+CVaR & Selection + Tail Reduction & 1.01× & 1.10× \\
+Corr. & Multiple Reductions + sqrt & 1.88× & 1.91× \\
+EWMA & Dependency chain (IIR) & 1.33× & 3.81× \\
+Kyle λ & Division-heavy & 1.76× & 1.76× \\
+RSI & Dual IIR + Masked & 2.59× & 3.27× \\
+VWAP & Reduction-heavy & 1.72× & 1.68× \\
+VaR & Selection / Sorting & 1.00× & 1.00× \\
 \bottomrule
 \end{tabular}
 \end{table}
